@@ -7,7 +7,7 @@ tags: ['Ye', 'music']
 ---
 
 <video controls loop preload="metadata">
-  <source src="https://archive.org/download/kanfm/kanfm.mp4" type="video/mp4">
+  <source src="https://archive.org/download/ye_kanfm/kanfm.mp4" type="video/mp4">
   请检查网络连接
 </video>
 
