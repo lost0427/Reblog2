@@ -5,11 +5,13 @@ draft: false
 description: 'How Excellent'
 tags: ['music', 'SundayService']
 ---
-
-<video controls loop preload="metadata">
-  <source src="https://archive.org/download/sundayservice-excellent/%5BSundayService%5DExcellent.mp4" type="video/mp4">
-  请检查网络连接
-</video>
+<div style="width: 100%; position: relative; padding-top: 56.25%;">
+  <iframe 
+    src="../ArtPlayer.html?videoUrl=https://archive.org/download/sundayservice-excellent/%5BSundayService%5DExcellent.mp4"
+    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;"
+    frameborder="0">
+  </iframe>
+</div>
 
 ```
 We're all here, to praise the words of the excellent God

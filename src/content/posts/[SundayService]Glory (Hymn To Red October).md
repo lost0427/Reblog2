@@ -5,11 +5,14 @@ draft: false
 description: 'Glory to God in the highest.'
 tags: ['music', 'SundayService']
 ---
+<div style="width: 100%; position: relative; padding-top: 56.25%;">
+  <iframe 
+    src="../ArtPlayer.html?videoUrl=https://archive.org/download/sundayservice-glory-hymn-to-red-october/%5BSundayService%5DGlory%20%28Hymn%20To%20Red%20October%29.mp4"
+    style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;"
+    frameborder="0">
+  </iframe>
+</div>
 
-<video controls loop preload="metadata">
-  <source src="https://archive.org/download/sundayservice-glory-hymn-to-red-october/%5BSundayService%5DGlory%20%28Hymn%20To%20Red%20October%29.mp4" type="video/mp4">
-  请检查网络连接
-</video>
 
 ```
 荣耀归于至高的上帝
