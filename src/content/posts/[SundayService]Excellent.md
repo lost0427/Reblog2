@@ -7,7 +7,7 @@ tags: ['music', 'SundayService']
 ---
 <div style="width: 100%; position: relative; padding-top: 56.25%;">
   <iframe 
-    src="../ArtPlayer.html?videoUrl=https://archive.org/download/sundayservice-excellent/%5BSundayService%5DExcellent.mp4"
+    src="../../ArtPlayer.html?videoUrl=https://archive.org/download/sundayservice-excellent/%5BSundayService%5DExcellent.mp4"
     style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none;"
     frameborder="0">
   </iframe>
