@@ -1,0 +1,237 @@
+<html>
+    <head>
+        <title>ArtPlayer</title>
+        <meta charset="UTF-8" />
+        <style>
+            .artplayer-app {
+                width: 100%;
+                height: auto;
+            }
+            .art-icon.art-icon-switchOn svg,
+            .art-icon.art-icon-switchOn svg path {
+                fill: var(--theme-accent) !important;
+                stroke: var(--theme-accent) !important;
+            }
+            .art-icon.art-icon-switchOff svg,
+            .art-icon.art-icon-switchOff svg path {
+                fill: #ffffff80 !important;
+                stroke: #ffffff80 !important;
+            }
+            .art-subtitle-top-position {
+                bottom: unset !important;
+                top: var(--art-subtitle-bottom) !important;
+            }
+            .art-video-player.art-control-show .art-subtitle-top-position {
+                bottom: unset !important;
+                top: var(--art-subtitle-bottom) !important;
+            }
+            .art-notice-inner {
+                display: none !important;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="artplayer-app"></div>
+        <script src="https://cdn.jsdelivr.net/npm/artplayer/dist/artplayer.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/artplayer-plugin-multiple-subtitles@1.1.0/dist/artplayer-plugin-multiple-subtitles.min.js"></script>
+        <script>
+            function getQueryParam(param) {
+                const urlParams = new URLSearchParams(window.location.search);
+                return urlParams.get(param);
+            }
+
+            var videoUrl = getQueryParam('videoUrl');
+            const subtitle1Url = getQueryParam('subtitle1Url');
+            const subtitle2Url = getQueryParam('subtitle2Url');
+            const STORAGE_KEY = 'video-source-preference';
+            const getSavedSourcePreference = () => {
+                try {
+                    const saved = localStorage.getItem(STORAGE_KEY);
+                    return saved ? JSON.parse(saved) : { source: 'archive' }; // 默认使用 archive
+                } catch (e) {
+                    console.warn('Failed to read source preference from localStorage', e);
+                    return { source: 'archive' };
+                }
+            };
+
+            const saveSourcePreference = (source) => {
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify({ source }));
+                } catch (e) {
+                    console.warn('Failed to save source preference to localStorage', e);
+                }
+            };
+
+            const savedPreference = getSavedSourcePreference();
+
+            const getVideoUrlBySource = (source) => {
+                const archiveIndex = videoUrl.indexOf('https://archive.org');
+                const cleanUrl = archiveIndex !== -1 ? videoUrl.slice(archiveIndex) : videoUrl;
+
+                switch (source) {
+                    case 'get2sb':
+                        return 'https://get.2sb.org/' + cleanUrl;
+                    case '99z':
+                        return 'https://99z.top/' + cleanUrl;
+                    case 'archive':
+                    default:
+                        return cleanUrl;
+                }
+            };
+            videoUrl = getVideoUrlBySource(savedPreference.source);
+            document.addEventListener('click', function(e) {
+                if (e.target.hasAttribute('data-source')) {
+                    const source = e.target.getAttribute('data-source');
+                    saveSourcePreference(source);
+                }
+            });
+            var art = new Artplayer({
+                container: '.artplayer-app',
+                url: videoUrl,
+                setting: true,
+                loop: true,
+                flip: true,
+                playbackRate: true,
+                plugins: [
+                    artplayerPluginMultipleSubtitles({
+                        subtitles: [
+                            {
+                                name: 'chinese',
+                                url: subtitle1Url,
+                            },
+                            {
+                                name: 'English',
+                                url: subtitle2Url,
+                            }
+                        ],
+                    })
+                ],
+                quality: [
+                    {
+                        default: savedPreference.source === 'archive',
+                        html: '<span data-source="archive" style="cursor: pointer;">archive源</span>',
+                        url: getVideoUrlBySource('archive'),
+                    },
+                    {
+                        default: savedPreference.source === 'get2sb',
+                        html: '<span data-source="get2sb" style="cursor: pointer;">get2sb源</span>',
+                        url: getVideoUrlBySource('get2sb'),
+                    },
+                    {
+                        default: savedPreference.source === '99z',
+                        html: '<span data-source="99z" style="cursor: pointer;">99z源</span>',
+                        url: getVideoUrlBySource('99z'),
+                    },
+                ],
+                settings: [
+                    {
+                        width: 200,
+                        html: '字幕选择',
+                        tooltip: '双语',
+                        icon: '<svg xmlns="http://www.w3.org/2000/svg" height="24" width="24" viewBox="0 0 512 512"><path d="M0 128C0 92.7 28.7 64 64 64l384 0c35.3 0 64 28.7 64 64l0 256c0 35.3-28.7 64-64 64L64 448c-35.3 0-64-28.7-64-64L0 128zm152 80l32 0c4.4 0 8 3.6 8 8 0 13.3 10.7 24 24 24s24-10.7 24-24c0-30.9-25.1-56-56-56l-32 0c-30.9 0-56 25.1-56 56l0 80c0 30.9 25.1 56 56 56l32 0c30.9 0 56-25.1 56-56 0-13.3-10.7-24-24-24s-24 10.7-24 24c0 4.4-3.6 8-8 8l-32 0c-4.4 0-8-3.6-8-8l0-80c0-4.4 3.6-8 8-8zm168 8c0-4.4 3.6-8 8-8l32 0c4.4 0 8 3.6 8 8 0 13.3 10.7 24 24 24s24-10.7 24-24c0-30.9-25.1-56-56-56l-32 0c-30.9 0-56 25.1-56 56l0 80c0 30.9 25.1 56 56 56l32 0c30.9 0 56-25.1 56-56 0-13.3-10.7-24-24-24s-24 10.7-24 24c0 4.4-3.6 8-8 8l-32 0c-4.4 0-8-3.6-8-8l0-80z"/></svg>',
+                        selector: [
+                            {
+                                html: '显示',
+                                tooltip: '显示',
+                                switch: true,
+                                onSwitch: function (item) {
+                                    item.tooltip = item.switch ? '隐藏' : '显示';
+                                    art.subtitle.show = !item.switch;
+                                    return !item.switch;
+                                },
+                            },
+                            {
+                                html: '字幕位置',
+                                tooltip: '底部',
+                                switch: false,
+                                onSwitch: function (item) {
+                                    const isTopPosition = !item.switch;
+                                    item.switch = isTopPosition;
+                                    item.tooltip = isTopPosition ? '顶部' : '底部';
+                                    
+                                    document.querySelectorAll('.art-video-player .art-subtitle').forEach(subtitle => {
+                                        if (isTopPosition) {
+                                            subtitle.classList.add('art-subtitle-top-position');
+                                        } else {
+                                            subtitle.classList.remove('art-subtitle-top-position');
+                                        }
+                                    });
+                                    
+                                    return item.switch;
+                                },
+                            },
+                            {
+                                html: '中英互换',
+                                tooltip: '否',
+                                switch: false,
+                                onSwitch: function (item) {
+                                    item.tooltip = item.switch ? '否' : '是';
+                                    if (item.switch) {
+                                        art.plugins.multipleSubtitles.tracks(['chinese', 'English']);
+                                    } else {
+                                        art.plugins.multipleSubtitles.tracks(['English', 'chinese']);
+                                    }
+                                    return !item.switch;
+                                },
+                            },
+                            {
+                                default: true,
+                                html: '双语',
+                                name: 'double',
+                            },
+                            {
+                                html: '中文',
+                                name: 'chinese',
+                            },
+                            {
+                                html: '英语',
+                                name: 'English',
+                            },
+                        ],
+                        onSelect: function (item) {
+                            if (item.name === 'double') {
+                                art.plugins.multipleSubtitles.reset();
+                            } else {
+                                art.plugins.multipleSubtitles.tracks([item.name]);
+                            }
+                            return item.html;
+                        },
+                    },
+                ],
+                controls: [
+                    {
+                        position: 'right',
+                        html: `<svg xmlns="http://www.w3.org/2000/svg" height="24" width="24" viewBox="0 0 24 24" fill="currentColor"><path d="M21 3C21.5523 3 22 3.44772 22 4V11H20V5H4V19H10V21H3C2.44772 21 2 20.5523 2 20V4C2 3.44772 2.44772 3 3 3H21ZM21 13C21.5523 13 22 13.4477 22 14V20C22 20.5523 21.5523 21 21 21H13C12.4477 21 12 20.5523 12 20V14C12 13.4477 12.4477 13 13 13H21ZM20 15H14V19H20V15Z"></path></svg>`,
+                        click: function () {
+                            art.pip = !art.pip;
+                        },
+                    },
+                    {
+                        position: 'right',
+                        html: `<svg xmlns="http://www.w3.org/2000/svg" height="24" width="24" viewBox="0 0 24 24" fill="currentColor"><path d="M8 3V5H4V9H2V3H8ZM2 21V15H4V19H8V21H2ZM22 21H16V19H20V15H22V21ZM22 9H20V5H16V3H22V9Z"></path></svg>`,
+                        click: function () {
+                            art.fullscreen = !art.fullscreen;
+                        },
+                    },
+                ],
+            });
+            function applyTheme() {
+                const themeColor = getComputedStyle(window.parent.document.documentElement)
+                    .getPropertyValue('--theme-accent')
+                    .trim();
+                if (themeColor) {
+                    art.theme = themeColor;
+                    document.documentElement.style.setProperty('--theme-accent', themeColor);
+                }
+            }
+            applyTheme();
+            const observer = new MutationObserver(() => {
+                applyTheme();
+            });
+            observer.observe(window.parent.document.documentElement, {
+                attributes: true,
+                attributeFilter: ['data-theme']
+            });
+        </script>
+    </body>
+</html>
