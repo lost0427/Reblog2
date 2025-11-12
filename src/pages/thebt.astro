@@ -1,6 +1,6 @@
 ---
 import Layout from '~/layouts/Layout.astro'
-import { getSortedPostsNoBT } from '~/utils'
+import { getSortedPostsOnlyBT } from '~/utils'
 import { getCollection, render } from 'astro:content'
 import PostPreview from '~/components/PostPreview.astro'
 import Pagination from '~/components/Pagination.astro'
@@ -21,7 +21,7 @@ if (home.length > 0) {
   homeAvatarImage = homeEntry.data.avatarImage
   homeGithubCalendar = homeEntry.data.githubCalendar
 }
-const sortedPosts = await getSortedPostsNoBT()
+const sortedPosts = await getSortedPostsOnlyBT()
 const postsHaveTags = sortedPosts.some(
   (post) => post.data.tags && post.data.tags.length > 0,
 )
@@ -31,32 +31,9 @@ const postsHaveSeries = sortedPosts.some((post) => post.data.series)
 
 <Layout>
   {
-    HomeContent && (
-      <HomeBanner avatarImage={homeAvatarImage} githubCalendar={homeGithubCalendar}>
-        <HomeContent />
-      </HomeBanner>
-    )
-  }
-  {
-    postsHaveSeries && (
-      <section>
-        <BlockHeader>Series</BlockHeader>
-        <SeriesSection posts={sortedPosts} />
-      </section>
-    )
-  }
-  {
-    postsHaveTags && (
-      <section>
-        <BlockHeader>Tags</BlockHeader>
-        <TagsSection posts={sortedPosts} />
-      </section>
-    )
-  }
-  {
     sortedPosts.length > 0 && (
       <section>
-        <BlockHeader>Latest Posts</BlockHeader>
+        <BlockHeader>The Brooklyn Tabernacle</BlockHeader>
         {sortedPosts
           .reverse()
           .slice(0, Math.floor(siteConfig.pageSize / 2))

@@ -33,6 +33,10 @@ const config: SiteConfig = {
       url: '/about',
     },
     {
+      name: 'TheBT',
+      url: '/thebt',
+    },
+    {
       name: 'Archive',
       url: '/posts',
     },

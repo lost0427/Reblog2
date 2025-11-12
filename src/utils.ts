@@ -223,6 +223,30 @@ export async function getSortedPosts() {
   return sortedPosts
 }
 
+export async function getSortedPostsNoBT() {
+  const allPosts = await getCollection('posts', ({ data }) => {
+    const isNotDraft = import.meta.env.PROD ? data.draft !== true : true
+    const hasNotTheBTTag = !(data.tags && data.tags.includes('TheBT'))
+    return isNotDraft && hasNotTheBTTag
+  })
+  const sortedPosts = allPosts.sort((a, b) => {
+    return a.data.published < b.data.published ? -1 : 1
+  })
+  return sortedPosts
+}
+
+export async function getSortedPostsOnlyBT() {
+  const allPosts = await getCollection('posts', ({ data }) => {
+    const isNotDraft = import.meta.env.PROD ? data.draft !== true : true
+    const hasTheBTTag = (data.tags && data.tags.includes('TheBT'))
+    return isNotDraft && hasTheBTTag
+  })
+  const sortedPosts = allPosts.sort((a, b) => {
+    return a.data.published < b.data.published ? -1 : 1
+  })
+  return sortedPosts
+}
+
 abstract class PostsCollationGroup implements CollationGroup<'posts'> {
   title: string
   url: string
