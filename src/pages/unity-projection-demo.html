@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Unity 透视 vs 正交：视锥体、Sorting Layer 与 Z 层级</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: #0f1115;
+    color: #e6e6e6;
+  }
+  header {
+    padding: 14px 20px;
+    background: #161a22;
+    border-bottom: 1px solid #262c38;
+  }
+  header h1 { margin: 0 0 4px; font-size: 18px; }
+  header p { margin: 0; font-size: 13px; color: #9aa4b2; }
+  .layout { display: flex; flex-wrap: wrap; gap: 12px; padding: 12px; }
+  .views { display: flex; gap: 12px; flex: 1 1 640px; min-width: 320px; }
+  .view {
+    flex: 1; background: #000; border: 1px solid #262c38;
+    border-radius: 8px; overflow: hidden; position: relative;
+    min-height: 360px;
+  }
+  .view .tag {
+    position: absolute; top: 8px; left: 8px; z-index: 2;
+    background: rgba(0,0,0,.55); padding: 3px 8px; border-radius: 5px;
+    font-size: 12px; color: #cfe3ff; pointer-events: none;
+  }
+  .view canvas { display: block; width: 100%; height: 100%; }
+  .viewBtn {
+    position: absolute; top: 8px; right: 8px; z-index: 3;
+    background: rgba(45,108,223,.85); color: #fff; border: none;
+    padding: 5px 10px; border-radius: 5px; font-size: 12px; cursor: pointer;
+  }
+  .viewBtn:hover { background: #2d6cdf; }
+  .panel {
+    flex: 0 0 320px; background: #161a22; border: 1px solid #262c38;
+    border-radius: 8px; padding: 16px; font-size: 13px;
+  }
+  .panel h2 { font-size: 14px; margin: 0 0 10px; color: #cfe3ff; }
+  .row { margin-bottom: 14px; }
+  .row label { display: block; margin-bottom: 5px; color: #b8c2d0; }
+  .row .val { color: #ffd479; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; }
+  .seg { display: flex; gap: 6px; }
+  .seg button {
+    flex: 1; padding: 8px; border: 1px solid #38415280; background: #1f2530;
+    color: #cdd6e4; border-radius: 6px; cursor: pointer; font-size: 13px;
+  }
+  .seg button.active { background: #2d6cdf; border-color: #2d6cdf; color: #fff; }
+  .check { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .note {
+    background: #11151c; border-left: 3px solid #2d6cdf; padding: 8px 10px;
+    border-radius: 4px; font-size: 12px; color: #9aa4b2; line-height: 1.6;
+  }
+  .status { font-size: 12px; line-height: 1.7; }
+  .status .ok { color: #5fd38c; }
+  .status .bad { color: #ff7a7a; }
+  hr { border: none; border-top: 1px solid #262c38; margin: 14px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Unity 透视 / 正交投影下的 Sprite 层级与 Z 偏移</h1>
+  <p>左：Scene 视图（可拖动旋转，显示相机视野体）。右：Game 视图（相机实际渲染结果）。</p>
+</header>
+
+<div class="layout">
+  <div class="views">
+    <div class="view"><div class="tag">Scene 视图 · 可视空间形状</div><button id="btnFront" class="viewBtn">对齐正面视角</button><canvas id="sceneCanvas"></canvas></div>
+    <div class="view"><div class="tag">Game 视图 · 相机所见</div><canvas id="gameCanvas"></canvas></div>
+  </div>
+
+  <div class="panel">
+    <h2>投影模式</h2>
+    <div class="row seg">
+      <button id="btnPersp" class="active">透视 Perspective</button>
+      <button id="btnOrtho">正交 Orthographic</button>
+    </div>
+    <div class="note" id="modeNote"></div>
+
+    <hr>
+    <h2>前景 Sprite 动画</h2>
+    <div class="row">
+      <label>Z 位置（远 ← → 近相机）：<span class="val" id="zVal"></span></label>
+      <input type="range" id="zSlider" min="-7" max="8" step="0.1" value="-3">
+    </div>
+    <div class="row">
+      <label>X 偏离中心：<span class="val" id="xVal"></span></label>
+      <input type="range" id="xSlider" min="-6" max="6" step="0.1" value="2">
+    </div>
+    <div class="row">
+      <label class="check">
+        <input type="checkbox" id="sortCheck">
+        尝试用 Sorting Layer 把它提到背景前
+      </label>
+    </div>
+
+    <hr>
+    <h2>状态</h2>
+    <div class="status" id="status"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+// ---------- 共享场景 ----------
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x05070b);
+
+// 背景 sprite（相当于 Unity 里的 sprite2d canvas 背景），固定在远处
+const bgTex = makeBackgroundTexture();
+const bg = new THREE.Mesh(
+  new THREE.PlaneGeometry(12, 7),
+  new THREE.MeshBasicMaterial({ map: bgTex })
+);
+bg.position.set(0, 0, 0);    // 背景在 z=0
+scene.add(bg);
+
+// 前景 sprite（带帧动画的角色）
+const charFrames = makeCharacterFrames();
+const charMat = new THREE.MeshBasicMaterial({ map: charFrames[0], transparent: true });
+const character = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), charMat);
+character.position.set(2, 0, -6);   // 默认偏离中心、且在背景后面
+scene.add(character);
+
+// 标注：相机视线中心轴
+const axisLine = new THREE.Line(
+  new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0,0,12), new THREE.Vector3(0,0,-9)]),
+  new THREE.LineBasicMaterial({ color: 0x335577 })
+);
+axisLine.layers.set(1);  // 仅 Scene 视图可见
+scene.add(axisLine);
+
+// ---------- 两个相机 ----------
+const PERSP = 'persp', ORTHO = 'ortho';
+let mode = PERSP;
+
+let mainCamera;            // 被渲染到 Game 视图的相机
+let camHelper;             // 视野体可视化（仅 Scene 视图）
+
+const ORTHO_HALF_H = 6.5;   // 正交相机半高，宽度按画布比例算（放大可视范围，避免裁切两侧）
+
+function buildMainCamera() {
+  if (camHelper) { scene.remove(camHelper); camHelper.geometry.dispose(); }
+  const aspect = gameAspect();
+  if (mode === PERSP) {
+    mainCamera = new THREE.PerspectiveCamera(50, aspect, 1, 30);
+  } else {
+    const h = ORTHO_HALF_H, w = h * aspect;
+    mainCamera = new THREE.OrthographicCamera(-w, w, h, -h, 1, 30);
+  }
+  mainCamera.position.set(0, 0, 14);
+  mainCamera.lookAt(0, 0, -5);
+  mainCamera.updateProjectionMatrix();
+  mainCamera.updateMatrixWorld();
+
+  camHelper = new THREE.CameraHelper(mainCamera);
+  camHelper.layers.set(1);             // 视野体只在 Scene 视图显示
+  scene.add(camHelper);
+}
+
+// Game 画布当前宽高比（退而求其次用 1）
+function gameAspect() {
+  const c = document.getElementById('gameCanvas');
+  const w = c.clientWidth, h = c.clientHeight;
+  return (w > 0 && h > 0) ? w / h : 1;
+}
+buildMainCamera();
+
+// Scene 视图的俯瞰相机（跟随投影模式切换：透视 / 正交）
+const sceneCanvas = document.getElementById('sceneCanvas');
+const OVERVIEW_HALF_H = 11;             // Scene 正交相机半高
+let overviewCamera;
+
+function sceneAspect() {
+  const w = sceneCanvas.clientWidth, h = sceneCanvas.clientHeight;
+  return (w > 0 && h > 0) ? w / h : 1;
+}
+
+function buildOverviewCamera(keepPose) {
+  const pos = keepPose ? keepPose.pos : new THREE.Vector3(16, 9, 17);
+  const aspect = sceneAspect();
+  if (mode === PERSP) {
+    overviewCamera = new THREE.PerspectiveCamera(45, aspect, 0.1, 200);
+  } else {
+    const h = OVERVIEW_HALF_H, w = h * aspect;
+    overviewCamera = new THREE.OrthographicCamera(-w, w, h, -h, 0.1, 200);
+  }
+  overviewCamera.position.copy(pos);
+  overviewCamera.up.set(0, 1, 0);
+  overviewCamera.layers.enable(1);       // 能看到辅助物（视野体、轴线）
+  if (controls) {
+    controls.object = overviewCamera;
+    controls.update();
+  }
+}
+
+// ---------- 两个渲染器 ----------
+const sceneRenderer = new THREE.WebGLRenderer({ canvas: sceneCanvas, antialias: true });
+const gameRenderer  = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas'), antialias: true });
+
+let controls = null;
+buildOverviewCamera();
+controls = new THREE.OrbitControls(overviewCamera, sceneCanvas);
+controls.target.set(0, 0, -3);
+controls.update();
+
+// 一键对齐正面视角（正对 Z 轴，与 Game 相机同向）
+document.getElementById('btnFront').onclick = () => {
+  controls.target.set(0, 0, -3);
+  overviewCamera.position.set(0, 0, 22);
+  overviewCamera.up.set(0, 1, 0);
+  overviewCamera.lookAt(0, 0, -3);
+  controls.update();
+};
+
+function resize() {
+  for (const [r, cam] of [[sceneRenderer, overviewCamera], [gameRenderer, mainCamera]]) {
+    const c = r.domElement;
+    const w = c.clientWidth, h = c.clientHeight;
+    if (w === 0 || h === 0) continue;
+    r.setPixelRatio(window.devicePixelRatio);
+    r.setSize(w, h, false);
+  }
+  // Scene 视图相机跟随画布宽高比
+  const sa = sceneAspect();
+  if (overviewCamera.isPerspectiveCamera) {
+    if (overviewCamera.aspect !== sa) {
+      overviewCamera.aspect = sa;
+      overviewCamera.updateProjectionMatrix();
+    }
+  } else {
+    const h = OVERVIEW_HALF_H, w = h * sa;
+    if (overviewCamera.right !== w) {
+      overviewCamera.left = -w; overviewCamera.right = w;
+      overviewCamera.top = h; overviewCamera.bottom = -h;
+      overviewCamera.updateProjectionMatrix();
+    }
+  }
+  // Game 视图相机跟随画布宽高比，避免画面被裁切或拉伸
+  const aspect = gameAspect();
+  if (mode === PERSP) {
+    if (mainCamera.aspect !== aspect) {
+      mainCamera.aspect = aspect;
+      mainCamera.updateProjectionMatrix();
+    }
+  } else {
+    const h = ORTHO_HALF_H, w = h * aspect;
+    if (mainCamera.right !== w) {
+      mainCamera.left = -w; mainCamera.right = w;
+      mainCamera.top = h; mainCamera.bottom = -h;
+      mainCamera.updateProjectionMatrix();
+    }
+  }
+  if (camHelper) camHelper.update();
+}
+window.addEventListener('resize', resize);
+
+// ---------- UI ----------
+const zSlider = document.getElementById('zSlider');
+const xSlider = document.getElementById('xSlider');
+const sortCheck = document.getElementById('sortCheck');
+const zVal = document.getElementById('zVal');
+const xVal = document.getElementById('xVal');
+const statusEl = document.getElementById('status');
+const modeNote = document.getElementById('modeNote');
+const btnPersp = document.getElementById('btnPersp');
+const btnOrtho = document.getElementById('btnOrtho');
+
+btnPersp.onclick = () => setMode(PERSP);
+btnOrtho.onclick = () => setMode(ORTHO);
+
+function setMode(m) {
+  mode = m;
+  btnPersp.classList.toggle('active', m === PERSP);
+  btnOrtho.classList.toggle('active', m === ORTHO);
+  buildMainCamera();
+  // Scene 观察相机也跟随切换：正交模式用正交相机，消除侧视透视位移
+  buildOverviewCamera({ pos: overviewCamera.position.clone() });
+  updateModeNote();
+}
+
+function updateModeNote() {
+  modeNote.innerHTML = mode === PERSP
+    ? '可视空间是<b>视锥体（截头金字塔）</b>。离中心轴越远的物体，改变 Z 会让它在屏幕上发生<b>位置偏移与缩放</b>——只有正好在中心轴上才不偏。'
+    : '可视空间是<b>长方体</b>。屏幕位置只由 X/Y 决定，改变 Z <b>不影响屏幕位置</b>，只决定前后遮挡——可直接用 Z 覆盖背景。';
+}
+updateModeNote();
+
+// ---------- 帧动画 ----------
+let frameIdx = 0, frameTime = 0;
+
+function animate(t) {
+  requestAnimationFrame(animate);
+  const dt = 16;
+  frameTime += dt;
+  if (frameTime > 140) {           // 切换 sprite 动画帧
+    frameTime = 0;
+    frameIdx = (frameIdx + 1) % charFrames.length;
+    charMat.map = charFrames[frameIdx];
+    charMat.needsUpdate = true;
+  }
+
+  // 读取控件
+  const z = parseFloat(zSlider.value);
+  const x = parseFloat(xSlider.value);
+  character.position.z = z;
+  character.position.x = x;
+  zVal.textContent = z.toFixed(1);
+  xVal.textContent = x.toFixed(1);
+
+  // Sorting Layer 模拟：仅改 renderOrder（不关 depthTest），无法越过 Z 深度
+  character.renderOrder = sortCheck.checked ? 10 : 0;
+
+  resize();
+  controls.update();
+  camHelper.update();
+
+  // Game 视图：隐藏辅助物（视野体/轴线）由 layer 控制，相机只渲染 layer 0
+  sceneRenderer.render(scene, overviewCamera);
+  gameRenderer.render(scene, mainCamera);
+
+  updateStatus(z, x);
+}
+requestAnimationFrame(animate);
+
+function updateStatus(z, x) {
+  const inFront = z > bg.position.z;     // 在背景前面（更靠近相机）
+  const occluded = !inFront;             // 被背景挡住
+  const dist = mainCamera.position.z - z;
+
+  let posLine;
+  if (mode === PERSP) {
+    // 透视下屏幕水平位置 ∝ x / 距离
+    const screenX = (dist > 0.01) ? (x / dist) : 0;
+    const offset = Math.abs(screenX);
+    posLine = offset < 0.02
+      ? `<span class="ok">基本在画面中心，无明显偏移</span>`
+      : `<span class="bad">屏幕水平偏移 ≈ ${screenX.toFixed(2)}（透视导致）</span>`;
+  } else {
+    posLine = `<span class="ok">屏幕水平位置固定 = ${x.toFixed(1)}（与 Z 无关）</span>`;
+  }
+
+  let layerLine;
+  if (sortCheck.checked && occluded) {
+    layerLine = `<span class="bad">Sorting Layer 提前 → 仍被背景遮挡：3D 深度测试由 Z 决定，Sorting Layer 不生效</span>`;
+  } else if (occluded) {
+    layerLine = `<span class="bad">在背景之后 → 被遮挡（藏在后面）</span>`;
+  } else {
+    layerLine = `<span class="ok">在背景之前 → 显示在背景上方</span>`;
+  }
+
+  statusEl.innerHTML = `
+    模式：<b>${mode === PERSP ? '透视' : '正交'}</b><br>
+    Sprite Z = ${z.toFixed(1)}，背景 Z = ${bg.position.z}<br>
+    遮挡：${layerLine}<br>
+    画面位置：${posLine}
+  `;
+}
+
+// ================= 纹理生成 =================
+function makeBackgroundTexture() {
+  const c = document.createElement('canvas'); c.width = 512; c.height = 300;
+  const g = c.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, 0, 300);
+  grd.addColorStop(0, '#3a6ea5'); grd.addColorStop(1, '#b8d8e8');
+  g.fillStyle = grd; g.fillRect(0, 0, 512, 300);
+  g.fillStyle = '#2e7d32'; g.fillRect(0, 220, 512, 80);
+  g.fillStyle = '#ffffff';
+  for (const [x, y, r] of [[90, 60, 26], [130, 55, 32], [110, 75, 24], [380, 90, 28], [420, 85, 34]]) {
+    g.beginPath(); g.arc(x, y, r, 0, 7); g.fill();
+  }
+  g.fillStyle = 'rgba(0,0,0,.35)'; g.font = 'bold 26px sans-serif';
+  g.fillText('背景 Sprite (Canvas)', 24, 200);
+  const t = new THREE.CanvasTexture(c);
+  return t;
+}
+
+function makeCharacterFrames() {
+  const frames = [];
+  for (let i = 0; i < 4; i++) {
+    const c = document.createElement('canvas'); c.width = 128; c.height = 128;
+    const g = c.getContext('2d');
+    g.clearRect(0, 0, 128, 128);
+    const bob = Math.sin(i / 4 * Math.PI * 2) * 6;
+    // 身体
+    g.fillStyle = '#ff5252';
+    g.beginPath(); g.arc(64, 50 + bob, 22, 0, 7); g.fill();      // 头
+    g.fillStyle = '#ffca28';
+    g.fillRect(50, 70 + bob, 28, 36);                            // 身体
+    // 腿（交替）
+    g.strokeStyle = '#37474f'; g.lineWidth = 7; g.lineCap = 'round';
+    const swing = (i % 2 === 0) ? 12 : -12;
+    g.beginPath();
+    g.moveTo(60, 106 + bob); g.lineTo(60 - swing, 124 + bob);
+    g.moveTo(68, 106 + bob); g.lineTo(68 + swing, 124 + bob);
+    g.stroke();
+    // 眼睛
+    g.fillStyle = '#fff';
+    g.beginPath(); g.arc(58, 48 + bob, 5, 0, 7); g.arc(70, 48 + bob, 5, 0, 7); g.fill();
+    g.fillStyle = '#000';
+    g.beginPath(); g.arc(59, 48 + bob, 2.5, 0, 7); g.arc(71, 48 + bob, 2.5, 0, 7); g.fill();
+    const t = new THREE.CanvasTexture(c);
+    frames.push(t);
+  }
+  return frames;
+}
+</script>
+</body>
+</html>

@@ -41,6 +41,10 @@ const config: SiteConfig = {
       url: '/posts',
     },
     {
+      name: 'unity-projection-demo',
+      url: '/unity-projection-demo',
+    },
+    {
       name: 'GitHub',
       url: 'https://github.com/lost0427',
       external: true,
